@@ -2,6 +2,8 @@
   "dataset": {
     "name": "lfm1b",
     "path": "exp/data",
+    "neg_sampling": false,    
+    "neg_sampling_ratio": 1, 
     "files": {
       "interactions": "LFM-1b_LEs.txt",
       "streams": "user_sessions",

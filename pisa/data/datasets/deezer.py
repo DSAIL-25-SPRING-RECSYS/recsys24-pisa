@@ -9,6 +9,15 @@ from pisa.utils.tempo import high_level_tempo_from_ts
 
 
 class DeezerDataset(Dataset):
+    def __init__(self,
+                negative_sampling: bool = False,
+                neg_sampling_ratio: float = 1.0,
+                **kwargs):
+    super().__init__(**kwargs)
+
+    # Negative sampling 옵션
+    self.negative_sampling   = negative_sampling
+    self.neg_sampling_ratio  = neg_sampling_ratio # positive 개수 대비 negative 개수 비율 (예: 1.0 = 같은 수만큼 뽑기)
 
     def _load_track_embeddings(self):
         if self.normalize_embedding:
@@ -100,6 +109,33 @@ class DeezerDataset(Dataset):
                 track_ids = df_group['product_track_id'].astype('int32').tolist()
                 idx = user_sess_index_map[user_id][session_id]
                 user_sessions[user_id][idx]['track_ids'] = track_ids
+
+                # ─── Negative Sampling 수행 ───
+                if self.negative_sampling:
+                    all_track_ids = set(
+                        tid for sessions in user_sessions.values() for sess in sessions for tid in sess['track_ids']
+                    )
+                    for user_id, sessions in user_sessions.items():
+                        for sess in sessions:
+                            pos = sess['track_ids']
+                            n_pos = len(pos)
+                            n_neg = int(n_pos * self.neg_sampling_ratio)
+                            candidates = list(all_track_ids - set(pos))
+                            replace = len(candidates) < n_neg
+                            sess['neg_track_ids'] = list(
+                                np.random.choice(candidates, size=n_neg, replace=replace)
+                            )
+
+                # Negative Sampling 적용하면 neg_track_ids 라는 필드가 추가되어 반환됨
+                    # 예시 ) 
+                    # user_A: [
+                    # {
+                    # 'session_id': 'sess1',
+                    # 'context': { … },
+                    # 'track_ids':     [10, 23, 51],          # positive samples
+                    # 'neg_track_ids': [ 7, 89, 34, 65, 90 ]  # negative samples
+                    # },
+
             # write result to cache
             self.logger.info(f'Write user session streams to {output_path}')
             pickle.dump(user_sessions, open(output_path, 'wb'))
